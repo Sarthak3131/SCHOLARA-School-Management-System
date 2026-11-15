@@ -74,15 +74,21 @@ export const getMe = async (req, res, next) => {
 /**
  * @desc    Log out current user & clear session cookie
  * @route   POST /api/auth/logout
- * @access  Public
+ * @access  Private (Authenticated)
  */
-export const logout = async (_req, res) => {
-  res.cookie('token', 'none', {
-    expires: new Date(Date.now() + 10 * 1000), // expires in 10 seconds
-    httpOnly: true,
-  });
+export const logout = async (req, res, next) => {
+  try {
+    await User.updateOne({ _id: req.user._id }, { $inc: { tokenVersion: 1 } });
 
-  sendSuccess(res, {}, 'Logged out successfully');
+    res.cookie('token', 'none', {
+      expires: new Date(Date.now() + 10 * 1000), // expires in 10 seconds
+      httpOnly: true,
+    });
+
+    sendSuccess(res, {}, 'Logged out successfully');
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**

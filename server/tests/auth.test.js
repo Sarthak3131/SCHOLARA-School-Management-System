@@ -162,8 +162,32 @@ describe('SCHOLARA Authentication & RBAC API Suite', () => {
     });
   });
 
-  it('clears the session cookie on logout', async () => {
+  it('requires authentication to log out', async () => {
     const res = await request(app).post('/api/auth/logout');
+    expect(res.status).toBe(401);
+  });
+
+  it('revokes the current bearer token without affecting another user', async () => {
+    const logout = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(logout.status).toBe(200);
+
+    const revoked = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${teacherToken}`);
+    expect(revoked.status).toBe(401);
+
+    const unaffected = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${guardianToken}`);
+    expect(unaffected.status).toBe(200);
+  });
+
+  it('clears the authenticated session cookie on logout', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
   });

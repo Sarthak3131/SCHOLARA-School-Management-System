@@ -22,6 +22,7 @@ export const generateToken = (user) => {
       email: user.email,
       role: user.role,
       name: user.name,
+      tokenVersion: user.tokenVersion || 0,
     },
     getJwtSecret(),
     {

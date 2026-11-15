@@ -34,6 +34,10 @@ export const protect = async (req, res, next) => {
       return next(new AppError('The user associated with this token no longer exists.', 401));
     }
 
+    if ((decoded.tokenVersion || 0) !== (user.tokenVersion || 0)) {
+      return next(new AppError('Your session has been revoked. Please log in again.', 401));
+    }
+
     if (!user.isActive) {
       return next(new AppError('Your account has been deactivated. Please contact administration.', 403));
     }
