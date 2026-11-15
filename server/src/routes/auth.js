@@ -17,7 +17,7 @@ const router = express.Router();
 
 // Public routes
 router.post('/login', loginValidator, login);
-router.post('/register', registerValidator, register);
+router.post('/register', protect, authorize('admin'), registerValidator, register);
 router.post('/logout', logout);
 
 // Private authenticated routes

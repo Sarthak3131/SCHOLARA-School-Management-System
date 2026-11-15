@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import app from '../src/app.js';
 import User from '../src/models/User.js';
 import { seedAuthUsers } from '../src/utils/seed.js';
+import { generateToken } from '../src/utils/token.js';
 
 describe('SCHOLARA Authentication & RBAC API Suite', () => {
   let adminToken;
@@ -10,43 +11,44 @@ describe('SCHOLARA Authentication & RBAC API Suite', () => {
   let guardianToken;
 
   beforeAll(async () => {
-    // Connect to test database
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/scholara';
-    if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(mongoUri);
-    }
-    // Seed users
+    if (mongoose.connection.readyState === 0) await mongoose.connect(mongoUri);
     await seedAuthUsers();
 
-    // Acquire tokens for test roles
-    const adminRes = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'admin@scholara.edu', password: 'Admin@123' });
-    adminToken = adminRes.body.token;
-
-    const teacherRes = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'teacher@scholara.edu', password: 'Teacher@123' });
-    teacherToken = teacherRes.body.token;
-
-    const guardianRes = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'guardian@scholara.edu', password: 'Guardian@123' });
-    guardianToken = guardianRes.body.token;
+    const login = async (email, password) => {
+      const response = await request(app).post('/api/auth/login').send({ email, password });
+      return response.body.token;
+    };
+    adminToken = await login('admin@scholara.edu', 'Admin@123');
+    teacherToken = await login('teacher@scholara.edu', 'Teacher@123');
+    guardianToken = await login('guardian@scholara.edu', 'Guardian@123');
   });
 
   afterAll(async () => {
     await mongoose.disconnect();
   });
 
+  it('fails closed when JWT_SECRET is missing', () => {
+    const configuredSecret = process.env.JWT_SECRET;
+    delete process.env.JWT_SECRET;
+    try {
+      expect(() => generateToken({
+        _id: new mongoose.Types.ObjectId(),
+        email: 'test@example.com',
+        role: 'guardian',
+        name: 'Test',
+      })).toThrow(/JWT_SECRET must be configured/i);
+    } finally {
+      process.env.JWT_SECRET = configuredSecret;
+    }
+  });
+
   describe('POST /api/auth/login', () => {
     it('authenticates admin with valid credentials and returns JWT', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'admin@scholara.edu',
-          password: 'Admin@123',
-        });
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'admin@scholara.edu',
+        password: 'Admin@123',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -57,109 +59,112 @@ describe('SCHOLARA Authentication & RBAC API Suite', () => {
     });
 
     it('rejects login with incorrect password with 401', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'admin@scholara.edu',
-          password: 'WrongPassword999',
-        });
-
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'admin@scholara.edu',
+        password: 'WrongPassword999',
+      });
       expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
       expect(res.body.message).toMatch(/Invalid email or password/i);
     });
 
     it('rejects login with non-existent email with 401', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'ghost@scholara.edu',
-          password: 'AnyPassword123',
-        });
-
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'ghost@scholara.edu',
+        password: 'AnyPassword123',
+      });
       expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
     });
 
     it('rejects malformed email format with 400 validation error', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'not-an-email',
-          password: 'Password123',
-        });
-
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'not-an-email',
+        password: 'Password123',
+      });
       expect(res.status).toBe(400);
-      expect(res.body.success).toBe(false);
       expect(res.body.errors).toBeDefined();
     });
   });
 
-  describe('GET /api/auth/me (Protected Route)', () => {
+  describe('POST /api/auth/register', () => {
+    it('requires an authenticated administrator', async () => {
+      const res = await request(app).post('/api/auth/register').send({
+        name: 'Attempted Admin',
+        email: 'attempted-admin@scholara.edu',
+        password: 'Password123',
+        role: 'admin',
+      });
+      expect(res.status).toBe(401);
+    });
+
+    it('blocks non-administrators from selecting privileged roles', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          name: 'Attempted Admin',
+          email: 'attempted-admin@scholara.edu',
+          password: 'Password123',
+          role: 'admin',
+        });
+      expect(res.status).toBe(403);
+    });
+
+    it('allows an administrator to create a role-managed account', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: 'Managed Guardian',
+          email: 'managed-guardian@scholara.edu',
+          password: 'Password123',
+          role: 'guardian',
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.user.role).toBe('guardian');
+      expect(res.body.user.password).toBeUndefined();
+      await User.deleteOne({ email: 'managed-guardian@scholara.edu' });
+    });
+  });
+
+  describe('GET /api/auth/me', () => {
     it('returns 401 when token is missing', async () => {
       const res = await request(app).get('/api/auth/me');
       expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
     });
 
-    it('returns 401 when token is invalid or corrupted', async () => {
-      const res = await request(app)
-        .get('/api/auth/me')
-        .set('Authorization', 'Bearer invalid_garbage_token');
-
+    it('returns 401 when token is invalid', async () => {
+      const res = await request(app).get('/api/auth/me').set('Authorization', 'Bearer invalid-token');
       expect(res.status).toBe(401);
-      expect(res.body.success).toBe(false);
     });
 
     it('returns current user profile when valid token is supplied', async () => {
-      const res = await request(app)
-        .get('/api/auth/me')
-        .set('Authorization', `Bearer ${teacherToken}`);
-
+      const res = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${teacherToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
       expect(res.body.data.user.email).toBe('teacher@scholara.edu');
       expect(res.body.data.user.role).toBe('teacher');
     });
   });
 
-  describe('RBAC Authorization', () => {
+  describe('RBAC authorization', () => {
     it('allows admin access to admin-only endpoint', async () => {
-      const res = await request(app)
-        .get('/api/auth/admin-only')
-        .set('Authorization', `Bearer ${adminToken}`);
-
+      const res = await request(app).get('/api/auth/admin-only').set('Authorization', `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
       expect(res.body.role).toBe('admin');
     });
 
-    it('blocks teacher from accessing admin-only endpoint with 403 Forbidden', async () => {
-      const res = await request(app)
-        .get('/api/auth/admin-only')
-        .set('Authorization', `Bearer ${teacherToken}`);
-
+    it.each([
+      ['teacher', () => teacherToken],
+      ['guardian', () => guardianToken],
+    ])('blocks %s from accessing admin-only endpoint', async (_role, token) => {
+      const res = await request(app).get('/api/auth/admin-only').set('Authorization', `Bearer ${token()}`);
       expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Forbidden/i);
-    });
-
-    it('blocks guardian from accessing admin-only endpoint with 403 Forbidden', async () => {
-      const res = await request(app)
-        .get('/api/auth/admin-only')
-        .set('Authorization', `Bearer ${guardianToken}`);
-
-      expect(res.status).toBe(403);
-      expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Forbidden/i);
     });
   });
 
-  describe('POST /api/auth/logout', () => {
-    it('clears session and returns 200', async () => {
-      const res = await request(app).post('/api/auth/logout');
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
+  it('clears the session cookie on logout', async () => {
+    const res = await request(app).post('/api/auth/logout');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
   });
 });

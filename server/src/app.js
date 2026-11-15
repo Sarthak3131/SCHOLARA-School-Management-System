@@ -18,6 +18,7 @@ import examinationsRouter from './routes/examinations.js';
 import feesRouter from './routes/fees.js';
 import auditRouter from './routes/audit.js';
 import reportsRouter from './routes/reports.js';
+import { assertJwtSecret } from './utils/token.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,6 +60,7 @@ app.use(errorHandler);
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 const start = async () => {
+  assertJwtSecret();
   await connectDB();
   app.listen(PORT, () => {
     console.log(`\n🏫  SCHOLARA API running on http://localhost:${PORT}`);

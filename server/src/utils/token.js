@@ -1,5 +1,17 @@
 import jwt from 'jsonwebtoken';
 
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    throw new Error('JWT_SECRET must be configured with at least 32 characters.');
+  }
+  return secret;
+};
+
+export const assertJwtSecret = () => {
+  getJwtSecret();
+};
+
 /**
  * Generate a signed JWT for an authenticated user.
  */
@@ -11,7 +23,7 @@ export const generateToken = (user) => {
       role: user.role,
       name: user.name,
     },
-    process.env.JWT_SECRET || 'scholara_super_secret_jwt_key_change_in_production_2024',
+    getJwtSecret(),
     {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d',
     }
@@ -24,7 +36,7 @@ export const generateToken = (user) => {
 export const verifyToken = (token) => {
   return jwt.verify(
     token,
-    process.env.JWT_SECRET || 'scholara_super_secret_jwt_key_change_in_production_2024'
+    getJwtSecret()
   );
 };
 
