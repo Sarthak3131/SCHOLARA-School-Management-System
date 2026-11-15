@@ -16,6 +16,8 @@ import academicsRouter from './routes/academics.js';
 import attendanceRouter from './routes/attendance.js';
 import examinationsRouter from './routes/examinations.js';
 import feesRouter from './routes/fees.js';
+import auditRouter from './routes/audit.js';
+import reportsRouter from './routes/reports.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -48,6 +50,8 @@ app.use('/api/academics', academicsRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/examinations', examinationsRouter);
 app.use('/api/fees', feesRouter);
+app.use('/api/audit', auditRouter);
+app.use('/api/reports', reportsRouter);
 
 // ── 404 & Error Handlers ──────────────────────────────────────────────────────
 app.use(notFound);

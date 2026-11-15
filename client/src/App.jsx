@@ -15,6 +15,8 @@ import MarksEntry from '@/pages/examinations/MarksEntry.jsx';
 import GuardianResults from '@/pages/guardian/GuardianResults.jsx';
 import FeeManagement from '@/pages/admin/FeeManagement.jsx';
 import GuardianFees from '@/pages/guardian/GuardianFees.jsx';
+import Reports from '@/pages/admin/Reports.jsx';
+import AuditLogs from '@/pages/admin/AuditLogs.jsx';
 import DesignSystemShowcase from '@/pages/DesignSystemShowcase.jsx';
 import ProtectedRoute from '@/components/auth/ProtectedRoute.jsx';
 import { ROLES } from '@/utils/constants.js';
@@ -113,6 +115,8 @@ function App() {
         />
         <Route path="/admin/exams" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><ExaminationManagement /></ProtectedRoute>} />
         <Route path="/admin/fees" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><FeeManagement /></ProtectedRoute>} />
+        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><Reports /></ProtectedRoute>} />
+        <Route path="/admin/audit" element={<ProtectedRoute allowedRoles={[ROLES.ADMIN]}><AuditLogs /></ProtectedRoute>} />
 
         {/* Protected Teacher Routes */}
         <Route
